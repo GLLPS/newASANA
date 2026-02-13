@@ -1,8 +1,10 @@
 import { Global, Module } from '@nestjs/common';
 import { StubWorkSourceService } from './work-source.service';
-import { StubBigTimeService } from './bigtime.service';
+import { RealBigTimeService, StubBigTimeService } from './bigtime.service';
 import { StubSharePointService } from './sharepoint.service';
 import { StubEmailService } from './email.service';
+import { BigTimeSyncService } from './bigtime-sync.service';
+import { BigTimeSyncController } from './bigtime-sync.controller';
 
 const workSourceProvider = {
   provide: 'IWorkSourceService',
@@ -11,7 +13,14 @@ const workSourceProvider = {
 
 const bigTimeProvider = {
   provide: 'IBigTimeService',
-  useClass: StubBigTimeService,
+  useFactory: () => {
+    if (process.env.BIGTIME_API_TOKEN && process.env.BIGTIME_FIRM_ID) {
+      console.log('[Integrations] Using LIVE BigTime API service');
+      return new RealBigTimeService();
+    }
+    console.log('[Integrations] Using STUB BigTime service (no credentials found)');
+    return new StubBigTimeService();
+  },
 };
 
 const sharePointProvider = {
@@ -26,7 +35,14 @@ const emailProvider = {
 
 @Global()
 @Module({
-  providers: [workSourceProvider, bigTimeProvider, sharePointProvider, emailProvider],
-  exports: [workSourceProvider, bigTimeProvider, sharePointProvider, emailProvider],
+  controllers: [BigTimeSyncController],
+  providers: [
+    workSourceProvider,
+    bigTimeProvider,
+    sharePointProvider,
+    emailProvider,
+    BigTimeSyncService,
+  ],
+  exports: [workSourceProvider, bigTimeProvider, sharePointProvider, emailProvider, BigTimeSyncService],
 })
 export class IntegrationsModule {}
