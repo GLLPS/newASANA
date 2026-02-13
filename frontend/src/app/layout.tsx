@@ -32,7 +32,7 @@ function Sidebar() {
         <h1 className="text-lg font-bold text-white tracking-tight">GL Safety Platform</h1>
         <p className="text-xs text-gray-500 mt-1">{user.email}</p>
       </div>
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {navLinks.map((link) => {
           const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
           return (
