@@ -95,7 +95,7 @@ export class InspectionSubmitService {
       await this.prisma.action.create({
         data: {
           tenantId,
-          clientId: inspection.bigtimeProject?.clientId ?? inspection.bigtimeProjectId,
+          clientId: bigtimeProject!.clientId,
           siteId: inspection.siteId,
           inspectionId: inspection.id,
           findingId: finding.id,
