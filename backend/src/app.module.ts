@@ -16,7 +16,7 @@ import { ActionModule } from './modules/action/action.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     PrismaModule,
     IntegrationsModule,
     AuthModule,

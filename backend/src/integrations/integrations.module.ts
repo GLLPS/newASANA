@@ -18,6 +18,9 @@ const bigTimeProvider = {
   useFactory: (config: ConfigService) => {
     const token = config.get<string>('BIGTIME_API_TOKEN');
     const firmId = config.get<string>('BIGTIME_FIRM_ID');
+    console.log(`[Integrations] BIGTIME_API_TOKEN: ${token ? '***' + token.slice(-6) : 'NOT SET'}`);
+    console.log(`[Integrations] BIGTIME_FIRM_ID: ${firmId || 'NOT SET'}`);
+    console.log(`[Integrations] cwd: ${process.cwd()}`);
     if (token && firmId) {
       console.log('[Integrations] Using LIVE BigTime API service');
       return new RealBigTimeService();
