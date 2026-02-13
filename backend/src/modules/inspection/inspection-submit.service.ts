@@ -47,64 +47,82 @@ export class InspectionSubmitService {
   }
 
   private async submitFinal(tenantId: string, inspection: any, userId: string, dto: SubmitInspectionDto) {
-    // Check required items - findings with requiredOverride
     const findings = await this.prisma.finding.findMany({
       where: { tenantId, inspectionId: inspection.id },
     });
 
-    // Log time entry (stub)
+    // Log time entry - non-blocking so submission still completes if BigTime fails
     if (dto.timeEntry) {
-      await this.bigTimeService.logTime(tenantId, {
-        projectId: inspection.bigtimeProjectId,
-        userId,
-        hours: dto.timeEntry,
-        date: new Date().toISOString(),
-        note: `Inspection ${inspection.id}`,
-      });
+      try {
+        await this.bigTimeService.logTime(tenantId, {
+          projectId: inspection.bigtimeProjectId,
+          userId,
+          hours: dto.timeEntry,
+          date: new Date().toISOString(),
+          note: `Inspection ${inspection.id}`,
+        });
+      } catch (err) {
+        console.warn(`[InspectionSubmit] Time entry logging failed (non-blocking):`, err);
+      }
     }
 
     // Generate PDF (stub)
     const pdfBuffer = Buffer.from('STUB PDF DOCUMENT');
     console.log(`[InspectionSubmit] Generated final PDF for inspection ${inspection.id}`);
 
-    // Email selected client contacts
+    // Email selected client contacts - non-blocking
     if (dto.contactEmails && dto.contactEmails.length > 0) {
-      await this.emailService.sendEmail(tenantId, {
-        to: dto.contactEmails,
-        subject: `Final Inspection Report - ${inspection.id}`,
-        body: 'The final inspection report is attached.',
-        attachments: [{ filename: 'inspection-report.pdf', content: pdfBuffer }],
-      });
+      try {
+        await this.emailService.sendEmail(tenantId, {
+          to: dto.contactEmails,
+          subject: `Final Inspection Report - ${inspection.id}`,
+          body: 'The final inspection report is attached.',
+          attachments: [{ filename: 'inspection-report.pdf', content: pdfBuffer }],
+        });
+      } catch (err) {
+        console.warn(`[InspectionSubmit] Email send failed (non-blocking):`, err);
+      }
     }
 
-    // Upload to SharePoint (stub)
+    // Upload to SharePoint (stub) - non-blocking
     const bigtimeProject = await this.prisma.bigTimeProject.findUnique({
       where: { id: inspection.bigtimeProjectId },
     });
-    const folderId = bigtimeProject?.sharepointFolderId ?? null;
-    await this.sharePointService.uploadDocument(
-      tenantId,
-      folderId,
-      `inspection-${inspection.id}.pdf`,
-      pdfBuffer,
-    );
+
+    if (bigtimeProject) {
+      const folderId = bigtimeProject.sharepointFolderId ?? null;
+      try {
+        await this.sharePointService.uploadDocument(
+          tenantId,
+          folderId,
+          `inspection-${inspection.id}.pdf`,
+          pdfBuffer,
+        );
+      } catch (err) {
+        console.warn(`[InspectionSubmit] SharePoint upload failed (non-blocking):`, err);
+      }
+    }
 
     // Create corrective actions for Issue findings
     const issueFindings = findings.filter(f => f.status === 'Issue');
-    for (const finding of issueFindings) {
-      await this.prisma.action.create({
-        data: {
-          tenantId,
-          clientId: bigtimeProject!.clientId,
-          siteId: inspection.siteId,
-          inspectionId: inspection.id,
-          findingId: finding.id,
-          description: `Corrective action for ${finding.category} - ${finding.riskType}`,
-          responsibleName: 'TBD',
-          dueDate: new Date(Date.now() + 14 * 86400000), // 14 days from now
-          status: 'Open',
-        },
-      });
+    const clientId = bigtimeProject?.clientId;
+
+    if (clientId) {
+      for (const finding of issueFindings) {
+        await this.prisma.action.create({
+          data: {
+            tenantId,
+            clientId,
+            siteId: inspection.siteId,
+            inspectionId: inspection.id,
+            findingId: finding.id,
+            description: `Corrective action for ${finding.category} - ${finding.riskType}`,
+            responsibleName: 'TBD',
+            dueDate: new Date(Date.now() + 14 * 86400000), // 14 days from now
+            status: 'Open',
+          },
+        });
+      }
     }
 
     // Mark inspection as Final
@@ -116,7 +134,7 @@ export class InspectionSubmitService {
     return {
       status: 'Final',
       inspectionId: inspection.id,
-      actionsCreated: issueFindings.length,
+      actionsCreated: clientId ? issueFindings.length : 0,
       message: 'Inspection finalized, report generated, and actions created.',
     };
   }

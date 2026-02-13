@@ -29,6 +29,14 @@ interface Finding {
   correctedOnSite: boolean;
 }
 
+interface InspectionPhoto {
+  id: string;
+  fileName: string;
+  storagePath: string;
+  mimeType: string;
+  createdAt: string;
+}
+
 interface SubmitResult {
   message?: string;
   [key: string]: unknown;
@@ -232,6 +240,9 @@ export default function InspectionDetailPage() {
           onFindingsAdded={(newFindings) => setFindings((prev) => [...prev, ...newFindings])}
         />
       )}
+
+      {/* Photos */}
+      <PhotosSection inspectionId={id} readOnly={inspection.status === 'Final'} />
 
       {/* Submit Inspection section */}
       <SubmitInspectionSection inspectionId={id} onSubmitted={(insp) => setInspection(insp)} />
@@ -496,6 +507,121 @@ function AddFindingsSection({
             </span>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/* ========== Photos Section ========== */
+
+const BACKEND_BASE = 'http://localhost:3001';
+
+function PhotosSection({
+  inspectionId,
+  readOnly,
+}: {
+  inspectionId: string;
+  readOnly: boolean;
+}) {
+  const [photos, setPhotos] = useState<InspectionPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<InspectionPhoto[]>(`/inspections/${inspectionId}/photos`)
+      .then(setPhotos)
+      .catch(() => {});
+  }, [inspectionId]);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setError(null);
+    setUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const photo = await api.upload<InspectionPhoto>(
+          `/inspections/${inspectionId}/photos`,
+          files[i],
+        );
+        setPhotos((prev) => [...prev, photo]);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to upload photo';
+      setError(message);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleDelete(photoId: string) {
+    try {
+      await api.del(`/inspections/photos/${photoId}`);
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete photo';
+      setError(message);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        Photos ({photos.length})
+      </h2>
+
+      {error && (
+        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-red-700 text-sm mb-4">
+          {error}
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
+          {photos.map((photo) => (
+            <div key={photo.id} className="relative group">
+              <img
+                src={`${BACKEND_BASE}${photo.storagePath}`}
+                alt={photo.fileName}
+                className="w-full h-32 object-cover rounded-lg border border-gray-200"
+              />
+              <p className="text-xs text-gray-500 mt-1 truncate">{photo.fileName}</p>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(photo.id)}
+                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete photo"
+                >
+                  X
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!readOnly && (
+        <div>
+          <label className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 cursor-pointer transition-colors disabled:opacity-50">
+            {uploading ? 'Uploading...' : 'Upload Photos'}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileChange}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
+          <span className="text-xs text-gray-500 ml-3">
+            JPG, PNG up to 10 MB each
+          </span>
+        </div>
       )}
     </div>
   );

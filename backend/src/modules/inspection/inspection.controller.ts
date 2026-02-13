@@ -3,10 +3,15 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { InspectionService } from './inspection.service';
 import { InspectionSubmitService } from './inspection-submit.service';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
@@ -58,5 +63,32 @@ export class InspectionController {
     @Body() data: Partial<CreateInspectionDto>,
   ) {
     return this.inspectionService.update(tenantId, id, data);
+  }
+
+  @Post(':id/photos')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  uploadPhoto(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.inspectionService.addPhoto(tenantId, id, file);
+  }
+
+  @Get(':id/photos')
+  getPhotos(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.inspectionService.getPhotos(tenantId, id);
+  }
+
+  @Delete('photos/:photoId')
+  deletePhoto(
+    @TenantId() tenantId: string,
+    @Param('photoId') photoId: string,
+  ) {
+    return this.inspectionService.deletePhoto(tenantId, photoId);
   }
 }

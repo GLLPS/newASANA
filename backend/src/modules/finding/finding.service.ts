@@ -26,6 +26,8 @@ export class FindingService {
         tenantId,
         inspectionId: dto.inspectionId,
         category: dto.category,
+        observation: dto.observation,
+        comment: dto.comment,
         status: dto.status,
         severity: dto.severity,
         riskType: dto.riskType,

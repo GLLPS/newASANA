@@ -12,16 +12,17 @@ model Tenant {
   name      String
   createdAt DateTime @default(now())
 
-  users           User[]
-  clients         Client[]
-  contacts        Contact[]
-  bigTimeProjects BigTimeProject[]
-  sites           Site[]
-  workItems       WorkItem[]
-  inspections     Inspection[]
-  findings        Finding[]
-  actions         Action[]
-  actionAuditLogs ActionAuditLog[]
+  users            User[]
+  clients          Client[]
+  contacts         Contact[]
+  bigTimeProjects  BigTimeProject[]
+  sites            Site[]
+  workItems        WorkItem[]
+  inspections      Inspection[]
+  inspectionPhotos InspectionPhoto[]
+  findings         Finding[]
+  actions          Action[]
+  actionAuditLogs  ActionAuditLog[]
 }
 
 model User {
@@ -149,10 +150,11 @@ model Inspection {
   status           InspectionStatus
   submittedAt      DateTime?
 
-  tenant         Tenant         @relation(fields: [tenantId], references: [id])
-  workItem       WorkItem?      @relation(fields: [workItemId], references: [id])
-  bigtimeProject BigTimeProject @relation(fields: [bigtimeProjectId], references: [id])
-  site           Site           @relation(fields: [siteId], references: [id])
+  tenant         Tenant            @relation(fields: [tenantId], references: [id])
+  workItem       WorkItem?         @relation(fields: [workItemId], references: [id])
+  bigtimeProject BigTimeProject    @relation(fields: [bigtimeProjectId], references: [id])
+  site           Site              @relation(fields: [siteId], references: [id])
+  photos         InspectionPhoto[]
   findings       Finding[]
   actions        Action[]
 
@@ -168,6 +170,22 @@ enum ReportType {
 enum InspectionStatus {
   Draft
   Final
+}
+
+model InspectionPhoto {
+  id           String   @id @default(uuid())
+  tenantId     String
+  inspectionId String
+  fileName     String
+  storagePath  String
+  mimeType     String
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  inspection Inspection @relation(fields: [inspectionId], references: [id])
+
+  @@index([tenantId])
+  @@index([inspectionId])
 }
 
 model Finding {

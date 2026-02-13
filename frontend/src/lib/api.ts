@@ -72,6 +72,35 @@ export const api = {
   del<T>(endpoint: string, options?: ApiOptions): Promise<T> {
     return request<T>('DELETE', endpoint, options);
   },
+
+  async upload<T>(endpoint: string, file: File): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers: Record<string, string> = {};
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        message: `Upload failed with status ${response.status}`,
+      }));
+      throw new Error(error.message || `Upload failed with status ${response.status}`);
+    }
+
+    return response.json() as Promise<T>;
+  },
 };
 
 export default api;
