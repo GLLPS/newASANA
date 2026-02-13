@@ -50,4 +50,13 @@ export class WorkItemController {
   ) {
     return this.workItemService.create(tenantId, dto);
   }
+
+  /** Create demo work items for this week using existing synced data */
+  @Post('seed-demo-week')
+  seedDemoWeek(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.workItemService.seedDemoWeek(tenantId, user.sub);
+  }
 }

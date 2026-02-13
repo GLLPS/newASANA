@@ -12,6 +12,7 @@ interface WorkItem {
   type: 'Inspection' | 'Training';
   scheduledDate: string;
   client: { id: string; name: string } | null;
+  bigtimeProject: { id: string; name: string | null; bigtimeProjectId: string } | null;
   site: { id: string; name: string } | null;
 }
 
@@ -44,6 +45,7 @@ function getMockWorkItems(): WorkItem[] {
       type: 'Inspection',
       scheduledDate: monday.toISOString(),
       client: { id: 'mock-c1', name: 'Acme Construction' },
+      bigtimeProject: { id: 'mock-bt1', name: 'Acme Tower Build', bigtimeProjectId: '101' },
       site: { id: 'mock-s1', name: 'Downtown Tower Project' },
     },
     {
@@ -51,6 +53,7 @@ function getMockWorkItems(): WorkItem[] {
       type: 'Training',
       scheduledDate: wednesday.toISOString(),
       client: { id: 'mock-c2', name: 'Metro Builders Inc.' },
+      bigtimeProject: { id: 'mock-bt2', name: 'Metro Warehouse', bigtimeProjectId: '102' },
       site: { id: 'mock-s2', name: 'Riverside Warehouse' },
     },
     {
@@ -58,6 +61,7 @@ function getMockWorkItems(): WorkItem[] {
       type: 'Inspection',
       scheduledDate: friday.toISOString(),
       client: { id: 'mock-c1', name: 'Acme Construction' },
+      bigtimeProject: { id: 'mock-bt1', name: 'Acme Tower Build', bigtimeProjectId: '101' },
       site: { id: 'mock-s3', name: 'Highway 9 Bridge' },
     },
   ];
@@ -134,8 +138,15 @@ function getRelativeDueLabel(dateStr: string): { text: string; color: string } {
 function WorkItemCard({ item }: { item: WorkItem }) {
   const isInspection = item.type === 'Inspection';
 
-  return (
-    <div className="card flex items-start gap-4">
+  // Build link for starting an inspection from this work item
+  const inspectionLink = isInspection && item.client
+    ? `/inspections/new?clientId=${item.client.id}${
+        item.bigtimeProject ? `&projectId=${item.bigtimeProject.id}` : ''
+      }${item.site ? `&siteId=${item.site.id}` : ''}`
+    : null;
+
+  const content = (
+    <>
       <div
         className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-semibold ${
           isInspection ? 'bg-blue-500' : 'bg-emerald-500'
@@ -171,10 +182,34 @@ function WorkItemCard({ item }: { item: WorkItem }) {
         <p className="text-sm font-medium text-gray-900 truncate">
           {item.client?.name ?? 'Unknown Client'}
         </p>
+        {item.bigtimeProject?.name && (
+          <p className="text-xs text-gray-600 truncate">{item.bigtimeProject.name}</p>
+        )}
         {item.site && (
           <p className="text-xs text-gray-500 truncate">{item.site.name}</p>
         )}
       </div>
+      {inspectionLink && (
+        <div className="flex-shrink-0 self-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </div>
+      )}
+    </>
+  );
+
+  if (inspectionLink) {
+    return (
+      <Link href={inspectionLink} className="card flex items-start gap-4 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer">
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="card flex items-start gap-4">
+      {content}
     </div>
   );
 }

@@ -96,9 +96,16 @@ export class BigTimeSyncService {
             tenantId,
             clientId: localClient.id,
             bigtimeProjectId: String(btProject.SystemId),
+            name: btProject.Nm || null,
           },
         });
         created++;
+      } else if (!existing.name && btProject.Nm) {
+        // Backfill name for previously synced projects
+        await this.prisma.bigTimeProject.update({
+          where: { id: existing.id },
+          data: { name: btProject.Nm },
+        });
       }
     }
 

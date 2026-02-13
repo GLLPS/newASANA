@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
 
@@ -17,6 +17,7 @@ interface Client {
 interface BigtimeProject {
   id: string;
   bigtimeProjectId: string;
+  name: string | null;
   clientId: string;
 }
 
@@ -28,6 +29,8 @@ interface Site {
 
 export default function NewInspectionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<BigtimeProject[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -40,11 +43,26 @@ export default function NewInspectionPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
 
+  // Inline site creation
+  const [showNewSite, setShowNewSite] = useState(false);
+  const [newSiteName, setNewSiteName] = useState('');
+  const [creatingSite, setCreatingSite] = useState(false);
+
+  // Pre-fill from query params (when coming from a work item)
+  const prefillClientId = searchParams.get('clientId');
+  const prefillProjectId = searchParams.get('projectId');
+  const prefillSiteId = searchParams.get('siteId');
+
   useEffect(() => {
     async function fetchClients() {
       try {
         const data = await api.get<Client[]>('/clients');
         setClients(data);
+
+        // Auto-select client from query params
+        if (prefillClientId && data.some((c) => c.id === prefillClientId)) {
+          setSelectedClientId(prefillClientId);
+        }
       } catch {
         // allow manual entry as fallback
       } finally {
@@ -52,7 +70,7 @@ export default function NewInspectionPage() {
       }
     }
     fetchClients();
-  }, []);
+  }, [prefillClientId]);
 
   useEffect(() => {
     if (!selectedClientId) {
@@ -71,13 +89,41 @@ export default function NewInspectionPage() {
         ]);
         setProjects(projectData);
         setSites(siteData);
+
+        // Auto-select from query params
+        if (prefillProjectId && projectData.some((p) => p.id === prefillProjectId)) {
+          setBigtimeProjectId(prefillProjectId);
+        }
+        if (prefillSiteId && siteData.some((s) => s.id === prefillSiteId)) {
+          setSiteId(prefillSiteId);
+        }
       } catch {
         setProjects([]);
         setSites([]);
       }
     }
     fetchForClient();
-  }, [selectedClientId]);
+  }, [selectedClientId, prefillProjectId, prefillSiteId]);
+
+  async function handleCreateSite() {
+    if (!newSiteName.trim() || !selectedClientId) return;
+    setCreatingSite(true);
+    try {
+      const created = await api.post<Site>('/sites', {
+        clientId: selectedClientId,
+        name: newSiteName.trim(),
+      });
+      setSites((prev) => [...prev, created]);
+      setSiteId(created.id);
+      setNewSiteName('');
+      setShowNewSite(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create site';
+      setError(message);
+    } finally {
+      setCreatingSite(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -152,7 +198,7 @@ export default function NewInspectionPage() {
 
             <div>
               <label htmlFor="bigtimeProjectId" className="block text-sm font-medium text-gray-700 mb-1">
-                BigTime Project
+                Project
               </label>
               {selectedClientId && projects.length > 0 ? (
                 <select
@@ -165,23 +211,15 @@ export default function NewInspectionPage() {
                   <option value="">Select a project...</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
-                      Project {p.bigtimeProjectId}
+                      {p.name || `Project ${p.bigtimeProjectId}`}
                     </option>
                   ))}
                 </select>
               ) : selectedClientId ? (
                 <div>
-                  <input
-                    id="bigtimeProjectId"
-                    type="text"
-                    value={bigtimeProjectId}
-                    onChange={(e) => setBigtimeProjectId(e.target.value)}
-                    placeholder="No projects synced - enter ID manually"
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    <Link href="/bigtime" className="text-blue-600 hover:underline">Sync projects from BigTime</Link> to use dropdown
+                  <p className="text-sm text-gray-500">
+                    No projects synced for this client.{' '}
+                    <Link href="/bigtime" className="text-blue-600 hover:underline">Sync from BigTime</Link>
                   </p>
                 </div>
               ) : (
@@ -194,30 +232,75 @@ export default function NewInspectionPage() {
                 Site
               </label>
               {selectedClientId && sites.length > 0 ? (
-                <select
-                  id="siteId"
-                  value={siteId}
-                  onChange={(e) => setSiteId(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                >
-                  <option value="">Select a site...</option>
-                  {sites.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                <div className="space-y-2">
+                  <select
+                    id="siteId"
+                    value={siteId}
+                    onChange={(e) => setSiteId(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select a site...</option>
+                    {sites.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {!showNewSite && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewSite(true)}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      + Add new site
+                    </button>
+                  )}
+                </div>
               ) : selectedClientId ? (
-                <input
-                  id="siteId"
-                  type="text"
-                  value={siteId}
-                  onChange={(e) => setSiteId(e.target.value)}
-                  placeholder="No sites for this client - enter ID manually"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
+                <div>
+                  <p className="text-sm text-gray-500 mb-2">
+                    No sites for this client yet. Create one:
+                  </p>
+                  {!showNewSite && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewSite(true)}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      + Create a site
+                    </button>
+                  )}
+                </div>
               ) : (
                 <p className="text-sm text-gray-400">Select a client first</p>
+              )}
+
+              {/* Inline new-site form */}
+              {showNewSite && selectedClientId && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newSiteName}
+                    onChange={(e) => setNewSiteName(e.target.value)}
+                    placeholder="e.g. Downtown Tower Project"
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateSite(); } }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateSite}
+                    disabled={creatingSite || !newSiteName.trim()}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {creatingSite ? 'Creating...' : 'Add'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewSite(false); setNewSiteName(''); }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
               )}
             </div>
 

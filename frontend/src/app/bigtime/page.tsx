@@ -51,6 +51,9 @@ export default function BigTimePage() {
   const [loadingData, setLoadingData] = useState(false);
   const [tabError, setTabError] = useState<string | null>(null);
 
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const [seedResult, setSeedResult] = useState<{ message: string; items?: string[] } | null>(null);
+
   const [connectionStatus, setConnectionStatus] = useState<{
     connected?: boolean;
     clientCount?: number;
@@ -202,6 +205,46 @@ export default function BigTimePage() {
               </div>
             </div>
           )}
+
+          {/* Seed Demo Week */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Seed Demo Schedule</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Create demo inspection work items for this week using your synced BigTime projects.
+              Items will appear on the &ldquo;This Week&rdquo; dashboard.
+            </p>
+            <button
+              onClick={async () => {
+                setSeedingDemo(true);
+                setSeedResult(null);
+                try {
+                  const result = await api.post<{ message: string; items?: string[] }>('/work-items/seed-demo-week');
+                  setSeedResult(result);
+                } catch (err: unknown) {
+                  const message = err instanceof Error ? err.message : 'Failed to seed demo data';
+                  setSeedResult({ message });
+                } finally {
+                  setSeedingDemo(false);
+                }
+              }}
+              disabled={seedingDemo}
+              className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {seedingDemo ? 'Seeding...' : 'Seed This Week'}
+            </button>
+            {seedResult && (
+              <div className="mt-3 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-emerald-700 text-sm">
+                <p className="font-medium">{seedResult.message}</p>
+                {seedResult.items && seedResult.items.length > 0 && (
+                  <ul className="mt-1 text-xs space-y-0.5">
+                    {seedResult.items.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Connection Details</h3>

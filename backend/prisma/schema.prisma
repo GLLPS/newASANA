@@ -82,6 +82,7 @@ model BigTimeProject {
   tenantId           String
   clientId           String
   bigtimeProjectId   String
+  name               String?
   sharepointFolderId String?
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
