@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -16,6 +16,14 @@ interface Inspection {
   site?: { id: string; name: string };
 }
 
+interface FindingPhoto {
+  id: string;
+  findingId: string;
+  fileName: string;
+  storagePath: string;
+  mimeType: string;
+}
+
 interface Finding {
   id: string;
   inspectionId: string;
@@ -27,14 +35,7 @@ interface Finding {
   riskType: 'OSHA' | 'Behavioral' | 'Equipment' | 'Process';
   oshaRef: string | null;
   correctedOnSite: boolean;
-}
-
-interface InspectionPhoto {
-  id: string;
-  fileName: string;
-  storagePath: string;
-  mimeType: string;
-  createdAt: string;
+  photos: FindingPhoto[];
 }
 
 interface SubmitResult {
@@ -43,6 +44,8 @@ interface SubmitResult {
 }
 
 /* ---------- helpers ---------- */
+
+const BACKEND_BASE = 'http://localhost:3001';
 
 function severityColor(severity: string): string {
   switch (severity) {
@@ -87,6 +90,10 @@ export default function InspectionDetailPage() {
     load();
   }, [id]);
 
+  const updateFinding = useCallback((updated: Finding) => {
+    setFindings((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -109,6 +116,8 @@ export default function InspectionDetailPage() {
     if (!findingsByCategory[f.category]) findingsByCategory[f.category] = [];
     findingsByCategory[f.category].push(f);
   });
+
+  const isDraft = inspection.status === 'Draft';
 
   return (
     <div className="space-y-8">
@@ -178,52 +187,12 @@ export default function InspectionDetailPage() {
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">{cat}</h3>
                 <div className="space-y-2">
                   {catFindings.map((finding) => (
-                    <div
+                    <FindingCard
                       key={finding.id}
-                      className={`border rounded-md p-3 flex flex-wrap items-start gap-3 ${
-                        finding.status === 'Issue'
-                          ? 'border-red-200 bg-red-50'
-                          : 'border-green-200 bg-green-50'
-                      }`}
-                    >
-                      <div className="flex-1 min-w-[200px]">
-                        <p className="text-sm text-gray-900">
-                          {finding.observation ?? finding.category}
-                        </p>
-                        {finding.comment && (
-                          <p className="text-xs text-gray-600 mt-1 italic">
-                            &ldquo;{finding.comment}&rdquo;
-                          </p>
-                        )}
-                        <p className="text-xs text-gray-500 mt-1">
-                          {finding.riskType}
-                          {finding.oshaRef ? ` | OSHA ${finding.oshaRef}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            finding.status === 'Issue'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-green-100 text-green-800'
-                          }`}
-                        >
-                          {finding.status}
-                        </span>
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${severityColor(
-                            finding.severity
-                          )}`}
-                        >
-                          {finding.severity}
-                        </span>
-                        {finding.correctedOnSite && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            Corrected on site
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                      finding={finding}
+                      readOnly={!isDraft}
+                      onUpdate={updateFinding}
+                    />
                   ))}
                 </div>
               </div>
@@ -233,7 +202,7 @@ export default function InspectionDetailPage() {
       </div>
 
       {/* Add Findings by Category */}
-      {inspection.status === 'Draft' && (
+      {isDraft && (
         <AddFindingsSection
           inspectionId={id}
           existingFindings={findings}
@@ -241,11 +210,152 @@ export default function InspectionDetailPage() {
         />
       )}
 
-      {/* Photos */}
-      <PhotosSection inspectionId={id} readOnly={inspection.status === 'Final'} />
-
       {/* Submit Inspection section */}
       <SubmitInspectionSection inspectionId={id} onSubmitted={(insp) => setInspection(insp)} />
+    </div>
+  );
+}
+
+/* ========== Finding Card with inline photo upload ========== */
+
+function FindingCard({
+  finding,
+  readOnly,
+  onUpdate,
+}: {
+  finding: Finding;
+  readOnly: boolean;
+  onUpdate: (finding: Finding) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setError(null);
+    setUploading(true);
+
+    try {
+      let updatedPhotos = [...finding.photos];
+      for (let i = 0; i < files.length; i++) {
+        const photo = await api.upload<FindingPhoto>(
+          `/findings/${finding.id}/photos`,
+          files[i],
+        );
+        updatedPhotos = [...updatedPhotos, photo];
+      }
+      onUpdate({ ...finding, photos: updatedPhotos });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleDeletePhoto(photoId: string) {
+    try {
+      await api.del(`/findings/photos/${photoId}`);
+      onUpdate({ ...finding, photos: finding.photos.filter((p) => p.id !== photoId) });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
+  return (
+    <div
+      className={`border rounded-md p-3 ${
+        finding.status === 'Issue'
+          ? 'border-red-200 bg-red-50'
+          : 'border-green-200 bg-green-50'
+      }`}
+    >
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <p className="text-sm text-gray-900">
+            {finding.observation ?? finding.category}
+          </p>
+          {finding.comment && (
+            <p className="text-xs text-gray-600 mt-1 italic">
+              &ldquo;{finding.comment}&rdquo;
+            </p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            {finding.riskType}
+            {finding.oshaRef ? ` | OSHA ${finding.oshaRef}` : ''}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              finding.status === 'Issue'
+                ? 'bg-red-100 text-red-800'
+                : 'bg-green-100 text-green-800'
+            }`}
+          >
+            {finding.status}
+          </span>
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${severityColor(
+              finding.severity
+            )}`}
+          >
+            {finding.severity}
+          </span>
+          {finding.correctedOnSite && (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              Corrected on site
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Photos */}
+      {(finding.photos.length > 0 || !readOnly) && (
+        <div className="mt-3 pt-3 border-t border-gray-200/60">
+          {error && (
+            <p className="text-xs text-red-600 mb-2">{error}</p>
+          )}
+          {finding.photos.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {finding.photos.map((photo) => (
+                <div key={photo.id} className="relative group">
+                  <img
+                    src={`${BACKEND_BASE}${photo.storagePath}`}
+                    alt={photo.fileName}
+                    className="w-20 h-20 object-cover rounded border border-gray-200"
+                  />
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePhoto(photo.id)}
+                      className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete photo"
+                    >
+                      X
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {!readOnly && (
+            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded border border-gray-300 hover:bg-gray-200 cursor-pointer transition-colors">
+              {uploading ? 'Uploading...' : 'Add Photo'}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleUpload}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -303,7 +413,6 @@ function AddFindingsSection({
   function toggleStatus(idx: number, status: 'Issue' | 'Positive') {
     const current = observations.get(idx);
     if (current?.status === status) {
-      // Deselect
       setObsState(idx, { status: null });
     } else {
       setObsState(idx, { status });
@@ -507,121 +616,6 @@ function AddFindingsSection({
             </span>
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-/* ========== Photos Section ========== */
-
-const BACKEND_BASE = 'http://localhost:3001';
-
-function PhotosSection({
-  inspectionId,
-  readOnly,
-}: {
-  inspectionId: string;
-  readOnly: boolean;
-}) {
-  const [photos, setPhotos] = useState<InspectionPhoto[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .get<InspectionPhoto[]>(`/inspections/${inspectionId}/photos`)
-      .then(setPhotos)
-      .catch(() => {});
-  }, [inspectionId]);
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setError(null);
-    setUploading(true);
-
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const photo = await api.upload<InspectionPhoto>(
-          `/inspections/${inspectionId}/photos`,
-          files[i],
-        );
-        setPhotos((prev) => [...prev, photo]);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to upload photo';
-      setError(message);
-    } finally {
-      setUploading(false);
-      e.target.value = '';
-    }
-  }
-
-  async function handleDelete(photoId: string) {
-    try {
-      await api.del(`/inspections/photos/${photoId}`);
-      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete photo';
-      setError(message);
-    }
-  }
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">
-        Photos ({photos.length})
-      </h2>
-
-      {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-red-700 text-sm mb-4">
-          {error}
-        </div>
-      )}
-
-      {photos.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-          {photos.map((photo) => (
-            <div key={photo.id} className="relative group">
-              <img
-                src={`${BACKEND_BASE}${photo.storagePath}`}
-                alt={photo.fileName}
-                className="w-full h-32 object-cover rounded-lg border border-gray-200"
-              />
-              <p className="text-xs text-gray-500 mt-1 truncate">{photo.fileName}</p>
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(photo.id)}
-                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Delete photo"
-                >
-                  X
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!readOnly && (
-        <div>
-          <label className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 cursor-pointer transition-colors disabled:opacity-50">
-            {uploading ? 'Uploading...' : 'Upload Photos'}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFileChange}
-              disabled={uploading}
-              className="hidden"
-            />
-          </label>
-          <span className="text-xs text-gray-500 ml-3">
-            JPG, PNG up to 10 MB each
-          </span>
-        </div>
       )}
     </div>
   );

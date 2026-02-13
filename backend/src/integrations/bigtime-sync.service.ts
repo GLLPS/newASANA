@@ -12,8 +12,8 @@ export class BigTimeSyncService {
   async syncClients(tenantId: string) {
     const btClients = await this.bigTimeService.getClients();
 
-    // Filter out clients with no name (BigTime has some blank entries)
-    const validClients = btClients.filter(c => c.Nm && c.Nm.trim().length > 0);
+    // Filter to active clients with valid names
+    const validClients = btClients.filter(c => !c.IsInactive && c.Nm && c.Nm.trim().length > 0);
 
     let created = 0;
     let updated = 0;
@@ -51,10 +51,10 @@ export class BigTimeSyncService {
     const btProjects = await this.bigTimeService.getProjects();
     const btClients = await this.bigTimeService.getClients();
 
-    // Build a lookup map from BigTime ClientId -> client name
+    // Build a lookup map from BigTime ClientId -> client name (active clients only)
     const btClientMap = new Map<number, string>();
     for (const c of btClients) {
-      if (c.Nm && c.Nm.trim().length > 0) {
+      if (!c.IsInactive && c.Nm && c.Nm.trim().length > 0) {
         btClientMap.set(c.SystemId, c.Nm);
       }
     }

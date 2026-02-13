@@ -19,7 +19,7 @@ model Tenant {
   sites            Site[]
   workItems        WorkItem[]
   inspections      Inspection[]
-  inspectionPhotos InspectionPhoto[]
+  findingPhotos    FindingPhoto[]
   findings         Finding[]
   actions          Action[]
   actionAuditLogs  ActionAuditLog[]
@@ -154,7 +154,6 @@ model Inspection {
   workItem       WorkItem?         @relation(fields: [workItemId], references: [id])
   bigtimeProject BigTimeProject    @relation(fields: [bigtimeProjectId], references: [id])
   site           Site              @relation(fields: [siteId], references: [id])
-  photos         InspectionPhoto[]
   findings       Finding[]
   actions        Action[]
 
@@ -170,22 +169,6 @@ enum ReportType {
 enum InspectionStatus {
   Draft
   Final
-}
-
-model InspectionPhoto {
-  id           String   @id @default(uuid())
-  tenantId     String
-  inspectionId String
-  fileName     String
-  storagePath  String
-  mimeType     String
-  createdAt    DateTime @default(now())
-
-  tenant     Tenant     @relation(fields: [tenantId], references: [id])
-  inspection Inspection @relation(fields: [inspectionId], references: [id])
-
-  @@index([tenantId])
-  @@index([inspectionId])
 }
 
 model Finding {
@@ -204,10 +187,27 @@ model Finding {
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id])
   inspection Inspection @relation(fields: [inspectionId], references: [id])
+  photos     FindingPhoto[]
   actions    Action[]
 
   @@index([tenantId])
   @@index([inspectionId])
+}
+
+model FindingPhoto {
+  id          String   @id @default(uuid())
+  tenantId    String
+  findingId   String
+  fileName    String
+  storagePath String
+  mimeType    String
+  createdAt   DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  finding Finding @relation(fields: [findingId], references: [id])
+
+  @@index([tenantId])
+  @@index([findingId])
 }
 
 enum FindingStatus {

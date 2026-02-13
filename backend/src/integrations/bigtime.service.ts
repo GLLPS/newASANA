@@ -61,6 +61,7 @@ export interface BigTimeClient {
   MainFX: string;
   Notes: string;
   FullAddress: string;
+  IsInactive: boolean;
 }
 
 export class RealBigTimeService implements IBigTimeService {
