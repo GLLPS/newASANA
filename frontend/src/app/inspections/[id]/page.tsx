@@ -421,7 +421,7 @@ function SubmitInspectionSection({
 }) {
   const [submitType, setSubmitType] = useState<'Draft' | 'Final'>('Draft');
   const [timeEntry, setTimeEntry] = useState('');
-  const [contactIds, setContactIds] = useState('');
+  const [contactEmails, setContactEmails] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
@@ -436,7 +436,7 @@ function SubmitInspectionSection({
       const body: {
         submitType: 'Draft' | 'Final';
         timeEntry?: number;
-        contactIds?: string[];
+        contactEmails?: string[];
       } = { submitType };
 
       if (submitType === 'Final') {
@@ -446,10 +446,10 @@ function SubmitInspectionSection({
             body.timeEntry = parsed;
           }
         }
-        if (contactIds.trim()) {
-          body.contactIds = contactIds
+        if (contactEmails.trim()) {
+          body.contactEmails = contactEmails
             .split(',')
-            .map((s) => s.trim())
+            .map((s) => s.trim().toLowerCase())
             .filter(Boolean);
         }
       }
@@ -531,15 +531,15 @@ function SubmitInspectionSection({
             </div>
 
             <div>
-              <label htmlFor="contact-ids" className="block text-sm font-medium text-gray-700 mb-1">
-                Contact IDs <span className="text-gray-400 font-normal">(optional, comma-separated)</span>
+              <label htmlFor="contact-emails" className="block text-sm font-medium text-gray-700 mb-1">
+                Contact Emails <span className="text-gray-400 font-normal">(optional, comma-separated)</span>
               </label>
               <input
-                id="contact-ids"
+                id="contact-emails"
                 type="text"
-                value={contactIds}
-                onChange={(e) => setContactIds(e.target.value)}
-                placeholder="e.g. uuid-1, uuid-2, uuid-3"
+                value={contactEmails}
+                onChange={(e) => setContactEmails(e.target.value)}
+                placeholder="e.g. roger@acme.com, jane@acme.com"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>

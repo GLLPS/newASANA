@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsArray, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsArray, IsEmail } from 'class-validator';
 
 export class SubmitInspectionDto {
   @IsEnum(['Draft', 'Final'])
@@ -6,8 +6,8 @@ export class SubmitInspectionDto {
 
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
-  contactIds?: string[];
+  @IsEmail({}, { each: true })
+  contactEmails?: string[];
 
   @IsOptional()
   timeEntry?: number;

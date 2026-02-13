@@ -67,20 +67,14 @@ export class InspectionSubmitService {
     const pdfBuffer = Buffer.from('STUB PDF DOCUMENT');
     console.log(`[InspectionSubmit] Generated final PDF for inspection ${inspection.id}`);
 
-    // Email selected client contacts (stub)
-    if (dto.contactIds && dto.contactIds.length > 0) {
-      const contacts = await this.prisma.contact.findMany({
-        where: { tenantId, id: { in: dto.contactIds } },
+    // Email selected client contacts
+    if (dto.contactEmails && dto.contactEmails.length > 0) {
+      await this.emailService.sendEmail(tenantId, {
+        to: dto.contactEmails,
+        subject: `Final Inspection Report - ${inspection.id}`,
+        body: 'The final inspection report is attached.',
+        attachments: [{ filename: 'inspection-report.pdf', content: pdfBuffer }],
       });
-      const emails = contacts.map(c => c.email);
-      if (emails.length > 0) {
-        await this.emailService.sendEmail(tenantId, {
-          to: emails,
-          subject: `Final Inspection Report - ${inspection.id}`,
-          body: 'The final inspection report is attached.',
-          attachments: [{ filename: 'inspection-report.pdf', content: pdfBuffer }],
-        });
-      }
     }
 
     // Upload to SharePoint (stub)
