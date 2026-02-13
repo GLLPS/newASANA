@@ -1,11 +1,11 @@
--- DropForeignKey
-ALTER TABLE "InspectionPhoto" DROP CONSTRAINT IF EXISTS "InspectionPhoto_tenantId_fkey";
-
--- DropForeignKey
-ALTER TABLE "InspectionPhoto" DROP CONSTRAINT IF EXISTS "InspectionPhoto_inspectionId_fkey";
-
--- DropTable
-DROP TABLE IF EXISTS "InspectionPhoto";
+-- Drop InspectionPhoto if it exists (may not exist in all environments)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'InspectionPhoto') THEN
+    ALTER TABLE "InspectionPhoto" DROP CONSTRAINT IF EXISTS "InspectionPhoto_tenantId_fkey";
+    ALTER TABLE "InspectionPhoto" DROP CONSTRAINT IF EXISTS "InspectionPhoto_inspectionId_fkey";
+    DROP TABLE "InspectionPhoto";
+  END IF;
+END $$;
 
 -- CreateTable
 CREATE TABLE "FindingPhoto" (
