@@ -1,10 +1,14 @@
 import { Global, Module } from '@nestjs/common';
+import { config } from 'dotenv';
 import { StubWorkSourceService } from './work-source.service';
 import { RealBigTimeService, StubBigTimeService } from './bigtime.service';
 import { StubSharePointService } from './sharepoint.service';
 import { StubEmailService } from './email.service';
 import { BigTimeSyncService } from './bigtime-sync.service';
 import { BigTimeSyncController } from './bigtime-sync.controller';
+
+// Ensure .env is loaded before provider factories run
+config();
 
 const workSourceProvider = {
   provide: 'IWorkSourceService',
