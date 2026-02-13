@@ -1,5 +1,4 @@
 import { Global, Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { StubWorkSourceService } from './work-source.service';
 import { RealBigTimeService, StubBigTimeService } from './bigtime.service';
 import { StubSharePointService } from './sharepoint.service';
@@ -14,13 +13,9 @@ const workSourceProvider = {
 
 const bigTimeProvider = {
   provide: 'IBigTimeService',
-  inject: [ConfigService],
-  useFactory: (config: ConfigService) => {
-    const token = config.get<string>('BIGTIME_API_TOKEN');
-    const firmId = config.get<string>('BIGTIME_FIRM_ID');
-    console.log(`[Integrations] BIGTIME_API_TOKEN: ${token ? '***' + token.slice(-6) : 'NOT SET'}`);
-    console.log(`[Integrations] BIGTIME_FIRM_ID: ${firmId || 'NOT SET'}`);
-    console.log(`[Integrations] cwd: ${process.cwd()}`);
+  useFactory: () => {
+    const token = process.env.BIGTIME_API_TOKEN;
+    const firmId = process.env.BIGTIME_FIRM_ID;
     if (token && firmId) {
       console.log('[Integrations] Using LIVE BigTime API service');
       return new RealBigTimeService();
