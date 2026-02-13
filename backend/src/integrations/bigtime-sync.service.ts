@@ -171,6 +171,21 @@ export class BigTimeSyncService {
     return this.bigTimeService.getClients();
   }
 
+  async checkConnection() {
+    try {
+      const clients = await this.bigTimeService.getClients();
+      const isArray = Array.isArray(clients);
+      return {
+        connected: true,
+        clientCount: isArray ? clients.length : 0,
+        raw: isArray ? undefined : clients,
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { connected: false, error: message };
+    }
+  }
+
   async syncAll(tenantId: string) {
     const clientResult = await this.syncClients(tenantId);
     const projectResult = await this.syncProjects(tenantId);

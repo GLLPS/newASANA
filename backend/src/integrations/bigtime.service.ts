@@ -89,6 +89,7 @@ export class RealBigTimeService implements IBigTimeService {
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
+    console.log(`[BigTime] ${method} ${url}`);
     const options: RequestInit = {
       method,
       headers: this.headers,
@@ -101,6 +102,7 @@ export class RealBigTimeService implements IBigTimeService {
 
     if (!response.ok) {
       const text = await response.text();
+      console.error(`[BigTime] API error ${response.status}: ${text}`);
       throw new Error(`BigTime API error ${response.status}: ${text}`);
     }
 
@@ -108,7 +110,11 @@ export class RealBigTimeService implements IBigTimeService {
       return {} as T;
     }
 
-    return response.json() as Promise<T>;
+    const json = await response.json();
+    // BigTime may return a raw array or an object like { Items: [...] }
+    const data = Array.isArray(json) ? json : (json as Record<string, unknown>);
+    console.log(`[BigTime] ${method} ${path} -> ${Array.isArray(data) ? data.length + ' items' : typeof data}`);
+    return data as T;
   }
 
   async logTime(_tenantId: string, entry: TimeEntry): Promise<{ success: boolean; entryId: string }> {

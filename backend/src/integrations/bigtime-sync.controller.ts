@@ -8,6 +8,12 @@ import { TenantId } from '../common/decorators/tenant.decorator';
 export class BigTimeSyncController {
   constructor(private syncService: BigTimeSyncService) {}
 
+  /** Quick connectivity test — fetches clients and returns count */
+  @Get('status')
+  status() {
+    return this.syncService.checkConnection();
+  }
+
   /** Sync all BigTime data (clients, projects, staff) into local DB */
   @Post('sync')
   syncAll(@TenantId() tenantId: string) {

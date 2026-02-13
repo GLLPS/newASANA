@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 
 interface BigTimeStaff {
@@ -49,6 +49,21 @@ export default function BigTimePage() {
   const [projects, setProjects] = useState<BigTimeProject[]>([]);
   const [clients, setClients] = useState<BigTimeClient[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [tabError, setTabError] = useState<string | null>(null);
+
+  const [connectionStatus, setConnectionStatus] = useState<{
+    connected?: boolean;
+    clientCount?: number;
+    error?: string;
+  } | null>(null);
+  const [checkingConnection, setCheckingConnection] = useState(true);
+
+  useEffect(() => {
+    api.get<{ connected: boolean; clientCount?: number; error?: string }>('/bigtime/status')
+      .then(setConnectionStatus)
+      .catch(() => setConnectionStatus({ connected: false, error: 'Could not reach backend' }))
+      .finally(() => setCheckingConnection(false));
+  }, []);
 
   async function handleSync() {
     setSyncing(true);
@@ -70,19 +85,21 @@ export default function BigTimePage() {
     if (tab === 'overview') return;
 
     setLoadingData(true);
+    setTabError(null);
     try {
       if (tab === 'staff') {
         const data = await api.get<BigTimeStaff[]>('/bigtime/staff');
-        setStaff(data.filter(s => !s.IsInactive));
+        setStaff(Array.isArray(data) ? data.filter(s => !s.IsInactive) : []);
       } else if (tab === 'projects') {
         const data = await api.get<BigTimeProject[]>('/bigtime/projects');
-        setProjects(data.filter(p => !p.IsInactive && p.Nm));
+        setProjects(Array.isArray(data) ? data.filter(p => !p.IsInactive && p.Nm) : []);
       } else if (tab === 'clients') {
         const data = await api.get<BigTimeClient[]>('/bigtime/clients');
-        setClients(data.filter(c => c.Nm));
+        setClients(Array.isArray(data) ? data.filter(c => c.Nm) : []);
       }
-    } catch {
-      // Silently handle - data just won't show
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load data from BigTime';
+      setTabError(message);
     } finally {
       setLoadingData(false);
     }
@@ -122,6 +139,12 @@ export default function BigTimePage() {
           ))}
         </nav>
       </div>
+
+      {tabError && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-6">
+          {tabError}
+        </div>
+      )}
 
       {/* Overview / Sync Tab */}
       {activeTab === 'overview' && (
@@ -185,7 +208,18 @@ export default function BigTimePage() {
             <div className="text-sm text-gray-500 space-y-1">
               <p>API: iq.bigtime.net</p>
               <p>Auth: Firm-Level API Token</p>
-              <p>Status: <span className="text-green-600 font-medium">Connected</span></p>
+              {checkingConnection ? (
+                <p>Status: <span className="text-gray-400 font-medium">Checking...</span></p>
+              ) : connectionStatus?.connected ? (
+                <p>Status: <span className="text-green-600 font-medium">Connected</span> ({connectionStatus.clientCount} clients found)</p>
+              ) : (
+                <div>
+                  <p>Status: <span className="text-red-600 font-medium">Not Connected</span></p>
+                  {connectionStatus?.error && (
+                    <p className="text-red-500 text-xs mt-1">{connectionStatus.error}</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
