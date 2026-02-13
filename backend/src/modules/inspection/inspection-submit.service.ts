@@ -1,4 +1,4 @@
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, HttpException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InspectionService } from './inspection.service';
 import { IEmailService } from '../../integrations/email.service';
@@ -17,21 +17,27 @@ export class InspectionSubmitService {
   ) {}
 
   async submit(tenantId: string, inspectionId: string, userId: string, dto: SubmitInspectionDto) {
-    const inspection = await this.inspectionService.findOne(tenantId, inspectionId);
+    try {
+      const inspection = await this.inspectionService.findOne(tenantId, inspectionId);
 
-    if (dto.submitType === 'Draft') {
-      return this.submitDraft(tenantId, inspection, userId);
-    } else {
-      return this.submitFinal(tenantId, inspection, userId, dto);
+      if (dto.submitType === 'Draft') {
+        return await this.submitDraft(tenantId, inspection, userId);
+      } else {
+        return await this.submitFinal(tenantId, inspection, userId, dto);
+      }
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      console.error('[InspectionSubmit] Unhandled error during submission:', err);
+      throw new InternalServerErrorException(
+        `Submission failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
   private async submitDraft(tenantId: string, inspection: any, userId: string) {
-    // Generate Word document (stub)
     const docBuffer = Buffer.from('STUB WORD DOCUMENT');
     console.log(`[InspectionSubmit] Generated draft Word document for inspection ${inspection.id}`);
 
-    // Email submitter only (stub)
     const submitter = await this.prisma.user.findUnique({ where: { id: userId } });
     if (submitter) {
       await this.emailService.sendEmail(tenantId, {
@@ -42,7 +48,6 @@ export class InspectionSubmitService {
       });
     }
 
-    // No time prompt for drafts
     return { status: 'Draft', inspectionId: inspection.id, message: 'Draft saved and emailed to submitter.' };
   }
 
@@ -51,7 +56,7 @@ export class InspectionSubmitService {
       where: { tenantId, inspectionId: inspection.id },
     });
 
-    // Log time entry - non-blocking so submission still completes if BigTime fails
+    // Log time entry - non-blocking
     if (dto.timeEntry) {
       try {
         await this.bigTimeService.logTime(tenantId, {
@@ -62,7 +67,7 @@ export class InspectionSubmitService {
           note: `Inspection ${inspection.id}`,
         });
       } catch (err) {
-        console.warn(`[InspectionSubmit] Time entry logging failed (non-blocking):`, err);
+        console.warn('[InspectionSubmit] Time entry logging failed (non-blocking):', err);
       }
     }
 
@@ -80,48 +85,59 @@ export class InspectionSubmitService {
           attachments: [{ filename: 'inspection-report.pdf', content: pdfBuffer }],
         });
       } catch (err) {
-        console.warn(`[InspectionSubmit] Email send failed (non-blocking):`, err);
+        console.warn('[InspectionSubmit] Email send failed (non-blocking):', err);
       }
     }
 
-    // Upload to SharePoint (stub) - non-blocking
-    const bigtimeProject = await this.prisma.bigTimeProject.findUnique({
-      where: { id: inspection.bigtimeProjectId },
-    });
+    // Upload to SharePoint - non-blocking
+    let bigtimeProject: { id: string; clientId: string; sharepointFolderId: string | null } | null = null;
+    try {
+      bigtimeProject = await this.prisma.bigTimeProject.findUnique({
+        where: { id: inspection.bigtimeProjectId },
+        select: { id: true, clientId: true, sharepointFolderId: true },
+      });
+    } catch (err) {
+      console.warn('[InspectionSubmit] BigTimeProject lookup failed:', err);
+    }
 
     if (bigtimeProject) {
-      const folderId = bigtimeProject.sharepointFolderId ?? null;
       try {
         await this.sharePointService.uploadDocument(
           tenantId,
-          folderId,
+          bigtimeProject.sharepointFolderId ?? null,
           `inspection-${inspection.id}.pdf`,
           pdfBuffer,
         );
       } catch (err) {
-        console.warn(`[InspectionSubmit] SharePoint upload failed (non-blocking):`, err);
+        console.warn('[InspectionSubmit] SharePoint upload failed (non-blocking):', err);
       }
     }
 
     // Create corrective actions for Issue findings
     const issueFindings = findings.filter(f => f.status === 'Issue');
     const clientId = bigtimeProject?.clientId;
+    let actionsCreated = 0;
 
     if (clientId) {
       for (const finding of issueFindings) {
-        await this.prisma.action.create({
-          data: {
-            tenantId,
-            clientId,
-            siteId: inspection.siteId,
-            inspectionId: inspection.id,
-            findingId: finding.id,
-            description: `Corrective action for ${finding.category} - ${finding.riskType}`,
-            responsibleName: 'TBD',
-            dueDate: new Date(Date.now() + 14 * 86400000), // 14 days from now
-            status: 'Open',
-          },
-        });
+        try {
+          await this.prisma.action.create({
+            data: {
+              tenantId,
+              clientId,
+              siteId: inspection.siteId,
+              inspectionId: inspection.id,
+              findingId: finding.id,
+              description: `Corrective action for ${finding.category} - ${finding.riskType}`,
+              responsibleName: 'TBD',
+              dueDate: new Date(Date.now() + 14 * 86400000),
+              status: 'Open',
+            },
+          });
+          actionsCreated++;
+        } catch (err) {
+          console.warn(`[InspectionSubmit] Action creation failed for finding ${finding.id}:`, err);
+        }
       }
     }
 
@@ -134,7 +150,7 @@ export class InspectionSubmitService {
     return {
       status: 'Final',
       inspectionId: inspection.id,
-      actionsCreated: clientId ? issueFindings.length : 0,
+      actionsCreated,
       message: 'Inspection finalized, report generated, and actions created.',
     };
   }

@@ -1,7 +1,8 @@
-import { IsEnum, IsOptional, IsArray, IsEmail } from 'class-validator';
+import { IsIn, IsOptional, IsArray, IsEmail, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class SubmitInspectionDto {
-  @IsEnum(['Draft', 'Final'])
+  @IsIn(['Draft', 'Final'])
   submitType!: 'Draft' | 'Final';
 
   @IsOptional()
@@ -10,5 +11,7 @@ export class SubmitInspectionDto {
   contactEmails?: string[];
 
   @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
   timeEntry?: number;
 }
