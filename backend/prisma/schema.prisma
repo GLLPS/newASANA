@@ -1,0 +1,259 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users           User[]
+  clients         Client[]
+  contacts        Contact[]
+  bigTimeProjects BigTimeProject[]
+  sites           Site[]
+  workItems       WorkItem[]
+  inspections     Inspection[]
+  findings        Finding[]
+  actions         Action[]
+  actionAuditLogs ActionAuditLog[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime @default(now())
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id])
+  assignedWorkItems WorkItem[]       @relation("AssignedTo")
+  closedActions     Action[]         @relation("ClosedBy")
+  auditLogEntries   ActionAuditLog[] @relation("ChangedBy")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+enum UserRole {
+  Admin
+  Staff
+}
+
+model Client {
+  id                   String  @id @default(uuid())
+  tenantId             String
+  name                 String
+  weeklySummaryEnabled Boolean @default(false)
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  contacts        Contact[]
+  bigTimeProjects BigTimeProject[]
+  sites           Site[]
+  workItems       WorkItem[]
+  actions         Action[]
+
+  @@index([tenantId])
+}
+
+model Contact {
+  id                         String  @id @default(uuid())
+  tenantId                   String
+  clientId                   String
+  name                       String
+  email                      String
+  receiveInspectionsDefault  Boolean @default(false)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+model BigTimeProject {
+  id                 String  @id @default(uuid())
+  tenantId           String
+  clientId           String
+  bigtimeProjectId   String
+  sharepointFolderId String?
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  client      Client       @relation(fields: [clientId], references: [id])
+  workItems   WorkItem[]
+  inspections Inspection[]
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+model Site {
+  id       String @id @default(uuid())
+  tenantId String
+  clientId String
+  name     String
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  client      Client       @relation(fields: [clientId], references: [id])
+  workItems   WorkItem[]
+  inspections Inspection[]
+  actions     Action[]
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+model WorkItem {
+  id               String       @id @default(uuid())
+  tenantId         String
+  externalSource   String
+  externalId       String
+  type             WorkItemType
+  clientId         String
+  bigtimeProjectId String
+  siteId           String?
+  assignedToUserId String
+  scheduledDate    DateTime
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  client         Client         @relation(fields: [clientId], references: [id])
+  bigtimeProject BigTimeProject @relation(fields: [bigtimeProjectId], references: [id])
+  site           Site?          @relation(fields: [siteId], references: [id])
+  assignedTo     User           @relation("AssignedTo", fields: [assignedToUserId], references: [id])
+  inspection     Inspection?
+
+  @@index([tenantId])
+  @@index([assignedToUserId])
+  @@index([scheduledDate])
+}
+
+enum WorkItemType {
+  Inspection
+  Training
+}
+
+model Inspection {
+  id               String           @id @default(uuid())
+  tenantId         String
+  workItemId       String?          @unique
+  bigtimeProjectId String
+  siteId           String
+  reportType       ReportType
+  status           InspectionStatus
+  submittedAt      DateTime?
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  workItem       WorkItem?      @relation(fields: [workItemId], references: [id])
+  bigtimeProject BigTimeProject @relation(fields: [bigtimeProjectId], references: [id])
+  site           Site           @relation(fields: [siteId], references: [id])
+  findings       Finding[]
+  actions        Action[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+enum ReportType {
+  StandardPDF
+  DraftWord
+}
+
+enum InspectionStatus {
+  Draft
+  Final
+}
+
+model Finding {
+  id               String      @id @default(uuid())
+  tenantId         String
+  inspectionId     String
+  category         String
+  status           FindingStatus
+  severity         Severity
+  riskType         RiskType
+  oshaRef          String?
+  correctedOnSite  Boolean     @default(false)
+  requiredOverride Boolean     @default(false)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  inspection Inspection @relation(fields: [inspectionId], references: [id])
+  actions    Action[]
+
+  @@index([tenantId])
+  @@index([inspectionId])
+}
+
+enum FindingStatus {
+  Issue
+  Positive
+}
+
+enum Severity {
+  Low
+  Medium
+  High
+}
+
+enum RiskType {
+  OSHA
+  Behavioral
+  Equipment
+  Process
+}
+
+model Action {
+  id               String       @id @default(uuid())
+  tenantId         String
+  clientId         String
+  siteId           String
+  inspectionId     String
+  findingId        String
+  description      String
+  responsibleName  String
+  responsibleEmail String?
+  dueDate          DateTime
+  status           ActionStatus @default(Open)
+  closedByUserId   String?
+  closedAt         DateTime?
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id])
+  client     Client           @relation(fields: [clientId], references: [id])
+  site       Site             @relation(fields: [siteId], references: [id])
+  inspection Inspection       @relation(fields: [inspectionId], references: [id])
+  finding    Finding          @relation(fields: [findingId], references: [id])
+  closedBy   User?            @relation("ClosedBy", fields: [closedByUserId], references: [id])
+  auditLogs  ActionAuditLog[]
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([status])
+}
+
+enum ActionStatus {
+  Open
+  Closed
+}
+
+model ActionAuditLog {
+  id             String @id @default(uuid())
+  tenantId       String
+  actionId       String
+  previousStatus String
+  newStatus      String
+  changedByUserId String
+  note           String?
+  createdAt      DateTime @default(now())
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  action    Action @relation(fields: [actionId], references: [id])
+  changedBy User   @relation("ChangedBy", fields: [changedByUserId], references: [id])
+
+  @@index([tenantId])
+  @@index([actionId])
+}
