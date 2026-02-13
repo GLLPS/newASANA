@@ -170,16 +170,18 @@ enum InspectionStatus {
 }
 
 model Finding {
-  id               String      @id @default(uuid())
+  id               String        @id @default(uuid())
   tenantId         String
   inspectionId     String
   category         String
+  observation      String?
+  comment          String?
   status           FindingStatus
   severity         Severity
   riskType         RiskType
   oshaRef          String?
-  correctedOnSite  Boolean     @default(false)
-  requiredOverride Boolean     @default(false)
+  correctedOnSite  Boolean       @default(false)
+  requiredOverride Boolean       @default(false)
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id])
   inspection Inspection @relation(fields: [inspectionId], references: [id])

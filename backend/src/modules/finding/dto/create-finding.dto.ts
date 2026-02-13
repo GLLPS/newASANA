@@ -7,6 +7,14 @@ export class CreateFindingDto {
   @IsString()
   category!: string;
 
+  @IsOptional()
+  @IsString()
+  observation?: string;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
+
   @IsEnum(['Issue', 'Positive'])
   status!: 'Issue' | 'Positive';
 
